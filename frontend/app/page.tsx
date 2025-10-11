@@ -2,7 +2,6 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { TicketUI } from '@/components/TicketUI';
 import { useState, useEffect } from 'react';
 
 // NFT Ticket Contract ABI (backend needs to provide complete ABI)
@@ -173,7 +172,23 @@ export default function Home() {
               {ownedTickets && ownedTickets.length > 0 ? (
                 <div className="space-y-3">
                   {ownedTickets.map((ticketId) => (
-                    <TicketUI key={ticketId.toString()} ticketId={ticketId.toString()} />
+                    <div
+                      key={ticketId.toString()}
+                      className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-lg p-4 hover:border-purple-500/50 transition-all"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-sm text-gray-400">Ticket ID</p>
+                          <p className="text-xl font-bold">#{ticketId.toString()}</p>
+                        </div>
+                        <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm">
+                          Active
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <p className="text-xs text-gray-400">NFT Token on Base Sepolia</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (

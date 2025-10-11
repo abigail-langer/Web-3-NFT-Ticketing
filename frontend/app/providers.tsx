@@ -9,7 +9,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 // Configure Base Sepolia testnet
 const config = getDefaultConfig({
   appName: 'NFT Ticket System',
-  projectId: 'YOUR_WALLETCONNECT_PROJECT_ID', // Get from https://cloud.walletconnect.com/
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'dummy_project_id_for_metamask', // Get from https://cloud.walletconnect.com/
   chains: [baseSepolia],
   ssr: true,
 });
