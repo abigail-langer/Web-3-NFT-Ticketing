@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:15.2-alpine
+    environment:
+      POSTGRES_DB: Ticket
+      POSTGRES_USER: Ticket
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - nft-ticketing-pg-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+volumes:
+  nft-ticketing-pg-data:

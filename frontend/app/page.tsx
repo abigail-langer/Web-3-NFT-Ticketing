@@ -1,210 +1,232 @@
 'use client';
 
+import Link from 'next/link';
+import { useState, useEffect, useCallback } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { useState, useEffect } from 'react';
+import { useAccount, useSignMessage, useSwitchChain } from 'wagmi';
+import { baseSepolia } from 'wagmi/chains';
 
-// NFT Ticket Contract ABI (backend needs to provide complete ABI)
-const TICKET_CONTRACT_ABI = [
-  {
-    "inputs": [
-      { "name": "eventId", "type": "uint256" },
-      { "name": "quantity", "type": "uint256" }
-    ],
-    "name": "purchaseTicket",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "name": "eventId", "type": "uint256" }],
-    "name": "getEventInfo",
-    "outputs": [
-      { "name": "name", "type": "string" },
-      { "name": "price", "type": "uint256" },
-      { "name": "totalSupply", "type": "uint256" },
-      { "name": "remaining", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "name": "owner", "type": "address" }],
-    "name": "getOwnedTickets",
-    "outputs": [{ "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const;
+// Define types for our data for type safety
+interface Event {
+  id: number;
+  name: string;
+  date: string;
+  location: string;
+  price: string;
+}
 
-// Contract address - backend needs to provide after deployment
-const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+interface AuthState {
+  token: string;
+  user: {
+    id: number;
+    wallet_address: string;
+  };
+}
+
+const API_BASE_URL = 'http://localhost:3001/api';
+const AUTH_TOKEN_KEY = 'nft-ticket-auth-token';
+
+const NetworkSwitcher = () => {
+    const { chain } = useAccount();
+    const { chains, switchChain } = useSwitchChain();
+
+    if (chain && chain.id !== baseSepolia.id) {
+        return (
+            <div className="fixed top-0 left-0 w-full bg-yellow-500 text-black p-2 text-center z-50 flex justify-center items-center space-x-4">
+                <span>Wrong Network Detected! Please switch to Base Sepolia.</span>
+                <button
+                    onClick={() => switchChain({ chainId: baseSepolia.id })}
+                    className="bg-black text-white font-bold py-1 px-3 rounded-lg"
+                >
+                    Switch Network
+                </button>
+            </div>
+        );
+    }
+
+    return null;
+};
+
 
 export default function Home() {
+  // App State
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<AuthState | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Wagmi Hooks
   const { address, isConnected } = useAccount();
-  const [selectedEventId, setSelectedEventId] = useState(1);
-  const [purchaseQuantity, setPurchaseQuantity] = useState(1);
+  const { signMessageAsync } = useSignMessage();
 
-  // Read event information
-  const { data: eventInfo, refetch: refetchEventInfo } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: TICKET_CONTRACT_ABI,
-    functionName: 'getEventInfo',
-    args: [BigInt(selectedEventId)],
-  });
-
-  // Read user owned tickets
-  const { data: ownedTickets, refetch: refetchOwnedTickets } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: TICKET_CONTRACT_ABI,
-    functionName: 'getOwnedTickets',
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address,
-    },
-  });
-
-  // Write contract function for purchasing tickets
-  const { data: hash, writeContract, isPending } = useWriteContract();
-
-  // Wait for transaction confirmation
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
-
-  // Refetch data after successful purchase
+  // --- Data Fetching ---
   useEffect(() => {
-    if (isSuccess) {
-      refetchEventInfo();
-      refetchOwnedTickets();
+    const fetchEvents = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/events`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        setEvents(data);
+      } catch (e) {
+        if (e instanceof Error) setError(e.message);
+        else setError('An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, []);
+
+  // --- Authentication Logic ---
+  const handleLogin = useCallback(async () => {
+    if (!address || isLoggingIn) return;
+    setIsLoggingIn(true);
+    try {
+      // 1. Get nonce from backend
+      const nonceRes = await fetch(`${API_BASE_URL}/auth/nonce`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      const { message } = await nonceRes.json();
+
+      // 2. Sign the message from the backend
+      const signature = await signMessageAsync({ message });
+
+      // 3. Verify signature with backend and get JWT
+      const verifyRes = await fetch(`${API_BASE_URL}/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address, signature }),
+      });
+      
+      if (!verifyRes.ok) throw new Error('Verification failed');
+
+      const authData: AuthState = await verifyRes.json();
+      localStorage.setItem(AUTH_TOKEN_KEY, authData.token);
+      setAuthState(authData);
+      console.log('Login successful, token:', authData.token);
+
+    } catch (err) {
+      console.error('Login failed:', err);
+      alert('Login failed. Check the console for details.');
+      // Clear any stale token
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      setAuthState(null);
+    } finally {
+      setIsLoggingIn(false);
     }
-  }, [isSuccess, refetchEventInfo, refetchOwnedTickets]);
+  }, [address, isLoggingIn, signMessageAsync]);
 
-  const handlePurchaseTicket = async () => {
-    if (!eventInfo) return;
-
-    const price = eventInfo[1]; // price from eventInfo
-    const totalPrice = price * BigInt(purchaseQuantity);
-
-    writeContract({
-      address: CONTRACT_ADDRESS,
-      abi: TICKET_CONTRACT_ABI,
-      functionName: 'purchaseTicket',
-      args: [BigInt(selectedEventId), BigInt(purchaseQuantity)],
-      value: totalPrice,
-    });
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    setAuthState(null);
   };
 
+  // Effect to handle automatic login on wallet connect
+  useEffect(() => {
+    if (isConnected && !authState && !isLoggingIn) {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!token) {
+        handleLogin();
+      }
+    }
+  }, [isConnected, authState, isLoggingIn, handleLogin]);
+
+  // Effect to verify token on initial load
+  useEffect(() => {
+    const handleVerifyToken = async (token: string) => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          // Silently fail and let the catch block handle token removal
+          return;
+        }
+        const data = await res.json();
+        setAuthState({ token, user: data });
+      } catch (error) {
+        console.error('Token verification failed:', error);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+      }
+    };
+
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token) {
+      handleVerifyToken(token);
+    }
+  }, []);
+
+
+  // --- Render ---
   return (
     <main className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-black text-white">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+      <NetworkSwitcher />
+      <div className="container mx-auto px-4 py-8 pt-16">
         <header className="flex justify-between items-center mb-12">
           <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
-            NFT Ticket System
+            NFT Ticket Marketplace
           </h1>
-          <ConnectButton />
+          <div className="flex items-center space-x-4">
+            <ConnectButton />
+            {isConnected && !authState && (
+              <button 
+                onClick={handleLogin} 
+                disabled={isLoggingIn}
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed"
+              >
+                {isLoggingIn ? 'Logging in...' : 'Login'}
+              </button>
+            )}
+            {authState && (
+               <div className="flex items-center space-x-4">
+                 <Link href="/my-tickets" className="text-sm font-medium hover:text-purple-400 transition-colors">
+                    My Tickets
+                 </Link>
+                 <span className="text-sm text-gray-300">Welcome, {authState.user.wallet_address.slice(0, 6)}...{authState.user.wallet_address.slice(-4)}</span>
+                 <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
+                   Logout
+                 </button>
+               </div>
+            )}
+          </div>
         </header>
 
-        {/* Main Content */}
-        {!isConnected ? (
-          <div className="text-center py-20">
-            <h2 className="text-3xl mb-4">Welcome to NFT Ticket System</h2>
-            <p className="text-gray-400 mb-8">Connect your wallet to get started on Base Sepolia</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Purchase Section */}
-            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
-              <h2 className="text-2xl font-bold mb-6">Purchase Tickets</h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Event ID</label>
-                  <input
-                    type="number"
-                    value={selectedEventId}
-                    onChange={(e) => setSelectedEventId(Number(e.target.value))}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min="1"
-                  />
-                </div>
-
-                {eventInfo && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                    <h3 className="font-bold mb-2">Event: {eventInfo[0]}</h3>
-                    <p className="text-sm">Price: {eventInfo[1].toString()} wei</p>
-                    <p className="text-sm">Available: {eventInfo[3].toString()} / {eventInfo[2].toString()}</p>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Quantity</label>
-                  <input
-                    type="number"
-                    value={purchaseQuantity}
-                    onChange={(e) => setPurchaseQuantity(Number(e.target.value))}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min="1"
-                  />
-                </div>
-
-                <button
-                  onClick={handlePurchaseTicket}
-                  disabled={isPending || isConfirming}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-500 disabled:to-gray-600 font-bold py-3 rounded-lg transition-all"
-                >
-                  {isPending || isConfirming ? 'Processing...' : 'Purchase Ticket'}
-                </button>
-
-                {isSuccess && (
-                  <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3 text-center">
-                    Purchase successful!
-                  </div>
-                )}
-              </div>
+        <div>
+          <h2 className="text-3xl font-bold mb-8 text-center">Upcoming Events</h2>
+          {loading && <div className="text-center text-xl text-gray-400">Loading events...</div>}
+          {error && (
+            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-center">
+              <p className="font-bold">Failed to load events</p>
+              <p className="text-sm mt-2">Please ensure the backend server is running.</p>
             </div>
-
-            {/* My Tickets Section */}
-            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
-              <h2 className="text-2xl font-bold mb-6">My Tickets</h2>
-
-              {ownedTickets && ownedTickets.length > 0 ? (
-                <div className="space-y-3">
-                  {ownedTickets.map((ticketId) => (
-                    <div
-                      key={ticketId.toString()}
-                      className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-lg p-4 hover:border-purple-500/50 transition-all"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-sm text-gray-400">Ticket ID</p>
-                          <p className="text-xl font-bold">#{ticketId.toString()}</p>
-                        </div>
-                        <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm">
-                          Active
-                        </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-white/10">
-                        <p className="text-xs text-gray-400">NFT Token on Base Sepolia</p>
-                      </div>
-                    </div>
-                  ))}
+          )}
+          {!loading && !error && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {events.map((event) => (
+                <div key={event.id} className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 transition-transform hover:scale-105 hover:border-purple-400">
+                  <div className="mb-4">
+                    <h3 className="text-2xl font-bold text-blue-300">{event.name}</h3>
+                    <p className="text-sm text-gray-400">{event.location}</p>
+                  </div>
+                  <div className="text-sm space-y-2 mb-6">
+                    <p><span className="font-semibold">Date:</span> {event.date}</p>
+                    <p><span className="font-semibold">Price:</span> {event.price}</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 font-bold py-2 rounded-lg transition-all">
+                      View Details
+                    </button>
+                    <Link href={`/market/${event.id}`} className="flex-1 text-center bg-gray-600 hover:bg-gray-700 font-bold py-2 rounded-lg transition-all">
+                      View Market
+                    </Link>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-gray-400 text-center py-8">No tickets owned yet</p>
-              )}
+              ))}
             </div>
-          </div>
-        )}
-
-        {/* Backend Requirements Notice */}
-        <div className="mt-12 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6">
-          <h3 className="text-xl font-bold mb-3">Backend Integration Required</h3>
-          <p className="text-sm text-gray-300">
-            This frontend is ready but requires backend smart contract deployment.
-            See BACKEND_REQUIREMENTS.md for details.
-          </p>
+          )}
         </div>
       </div>
     </main>
