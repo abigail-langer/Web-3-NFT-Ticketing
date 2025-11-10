@@ -11,11 +11,11 @@ async function main() {
   const SYMBOL = "TM"
 
   // Deploy contract
-  const TokenMaster = await ethers.getContractFactory("TokenMaster")
-  const tokenMaster = await TokenMaster.deploy(NAME, SYMBOL)
-  await tokenMaster.waitForDeployment()
+  const TicketContract = await ethers.getContractFactory("TicketContract")
+  const ticketContract = await TicketContract.deploy(NAME, SYMBOL)
+  await ticketContract.waitForDeployment()
 
-  console.log(`Deployed TokenMaster Contract at: ${await tokenMaster.getAddress()}\n`)
+  console.log(`Deployed TicketContract Contract at: ${await ticketContract.getAddress()}\n`)
 
   // List 6 events
   const occasions = [
@@ -62,7 +62,7 @@ async function main() {
   ]
 
   for (var i = 0; i < 5; i++) {
-    const transaction = await tokenMaster.connect(deployer).list(
+    const transaction = await ticketContract.connect(deployer).list(
       occasions[i].name,
       occasions[i].cost,
       occasions[i].tickets,
