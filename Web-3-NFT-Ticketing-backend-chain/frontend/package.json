@@ -1,0 +1,40 @@
+{
+  "name": "base-ticket-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2",
+    "@rainbow-me/rainbowkit": "^2.2.9",
+    "@tanstack/react-query": "^5.59.16",
+    "@web3auth/base": "^9.7.0",
+    "@web3auth/ethereum-provider": "^9.7.0",
+    "@web3auth/modal": "^10.8.0",
+    "@yudiel/react-qr-scanner": "^2.4.1",
+    "ethers": "^6.15.0",
+    "next": "^15.0.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "viem": "^2.9.40",
+    "wagmi": "^2.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.7.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "19.2.2",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "5.9.3"
+  },
+  "version": "1.0.0",
+  "description": "A decentralized event ticketing system frontend built with Next.js 14 and Web3 stack, deployed on Base Sepolia testnet.",
+  "main": "next.config.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
