@@ -196,7 +196,10 @@ export const CONTRACT_ABI = [
       { internalType: 'string', name: '_date', type: 'string' },
       { internalType: 'string', name: '_time', type: 'string' },
       { internalType: 'string', name: '_location', type: 'string' },
-      { internalType: 'bool', name: '_resellable', type: 'bool' }
+      { internalType: 'bool', name: '_resellable', type: 'bool' },
+      { internalType: 'uint256', name: '_eventEndTime', type: 'uint256' },
+      { internalType: 'uint256', name: '_publicSaleStart', type: 'uint256' },
+      { internalType: 'bool', name: '_poapEnabled', type: 'bool' }
     ],
     name: 'list',
     outputs: [],
@@ -264,7 +267,7 @@ export const CONTRACT_ABI = [
   },
   {
     inputs: [{ internalType: 'uint256', name: '_occasionId', type: 'uint256' }],
-    name: 'prioritySeats',
+    name: 'getPrioritySeats',
     outputs: [{ internalType: 'uint256[]', name: '', type: 'uint256[]' }],
     stateMutability: 'view',
     type: 'function'

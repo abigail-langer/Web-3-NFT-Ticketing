@@ -79,7 +79,7 @@ export default function EventDetailPage() {
         const seats = await publicClient.readContract({
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
-          functionName: 'prioritySeats',
+          functionName: 'getPrioritySeats',
           args: [BigInt(eventId)],
         }) as bigint[];
         setPrioritySeats(seats || []);

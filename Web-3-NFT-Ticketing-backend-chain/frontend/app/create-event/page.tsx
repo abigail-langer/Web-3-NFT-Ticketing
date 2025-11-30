@@ -48,6 +48,9 @@ export default function CreateEventPage() {
           formData.time,
           formData.location,
           formData.resellable,
+          BigInt(Math.floor(Date.now() / 1000) + 86400 * 30), // Default: End time 30 days from now
+          BigInt(Math.floor(Date.now() / 1000)), // Default: Public sale starts immediately
+          false, // Default: POAP disabled
         ],
       });
     } catch (error) {

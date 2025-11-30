@@ -108,6 +108,14 @@ export default function Home() {
             )}
             {isConnected && (
               <Link 
+                href="/my-events" 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+              >
+                My Events
+              </Link>
+            )}
+            {isConnected && (
+              <Link 
                 href="/my-poaps" 
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
@@ -130,8 +138,12 @@ export default function Home() {
                 Create Event
               </Link>
             )}
+
           </div>
         </header>
+
+
+
 
         {/* Events List */}
         <div>
