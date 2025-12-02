@@ -1,6 +1,6 @@
 // 合约配置
-export const CONTRACT_ADDRESS = '0x04f1a284B7905e879c1A22B3573BE0B66c614112' as const;
-export const POAP_CONTRACT_ADDRESS = '0x2e4eb28453A763c20eBbc3AC52d310Ea917D9f63' as const;
+export const CONTRACT_ADDRESS = '0xD274e66aB4eFa2F520fd3Ab6384d243B59bA4179' as const;
+export const POAP_CONTRACT_ADDRESS = '0x0DC343B4A3D35f1fec010F10B438b1926Fc065f3' as const;
 
 // 合约 ABI - 只包含前端需要的函数
 export const CONTRACT_ABI = [

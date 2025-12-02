@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useSwitchChain, useReadContract, usePublicClient } from 'wagmi';
-import { sepolia } from 'wagmi/chains';
+import { baseSepolia } from 'wagmi/chains';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../config/contract';
 import { formatEther } from 'viem';
 
@@ -26,15 +27,15 @@ const NetworkSwitcher = () => {
     const { chain } = useAccount();
     const { switchChain } = useSwitchChain();
 
-    if (chain && chain.id !== sepolia.id) {
+    if (chain && chain.id !== baseSepolia.id) {
         return (
             <div className="fixed top-0 left-0 w-full bg-yellow-500 text-black p-2 text-center z-50 flex justify-center items-center space-x-4">
-                <span>⚠️ Wrong Network! Please switch to Sepolia Testnet.</span>
+                <span>⚠️ Wrong Network! Please switch to Base Sepolia Testnet.</span>
                 <button
-                    onClick={() => switchChain({ chainId: sepolia.id })}
+                    onClick={() => switchChain({ chainId: baseSepolia.id })}
                     className="bg-black text-white font-bold py-1 px-3 rounded-lg hover:bg-gray-800"
                 >
-                    Switch to Sepolia
+                    Switch to Base Sepolia
                 </button>
             </div>
         );
@@ -45,8 +46,31 @@ const NetworkSwitcher = () => {
 export default function Home() {
   const [occasions, setOccasions] = useState<Occasion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
   const { address, isConnected, chain } = useAccount();
   const publicClient = usePublicClient();
+  const router = useRouter();
+
+  // 检查登录状态
+  useEffect(() => {
+    const loggedIn = sessionStorage.getItem('isLoggedIn');
+    const storedUsername = sessionStorage.getItem('username');
+
+    if (loggedIn === 'true' && storedUsername) {
+      setIsLoggedIn(true);
+      setUsername(storedUsername);
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
+
+  // 登出功能
+  const handleLogout = () => {
+    sessionStorage.removeItem('isLoggedIn');
+    sessionStorage.removeItem('username');
+    router.push('/login');
+  };
 
   // 读取总活动数
   const { data: totalOccasions } = useReadContract({
@@ -58,9 +82,20 @@ export default function Home() {
   // 加载所有活动
   useEffect(() => {
     const loadOccasions = async () => {
-      if (!totalOccasions || !publicClient) return;
+      console.log('🔍 Debug Info:', {
+        totalOccasions: totalOccasions?.toString(),
+        hasPublicClient: !!publicClient,
+        contractAddress: CONTRACT_ADDRESS,
+        chainId: chain?.id
+      });
+
+      if (!totalOccasions || !publicClient) {
+        console.log('⏸️ Waiting for data...', { totalOccasions, publicClient: !!publicClient });
+        return;
+      }
       
       setLoading(true);
+      console.log('✅ Starting to load occasions, total:', totalOccasions);
       try {
         const occasionPromises = [];
         for (let i = 1; i <= Number(totalOccasions); i++) {
@@ -73,11 +108,13 @@ export default function Home() {
             })
           );
         }
-        
+
+        console.log('⏳ Fetching', occasionPromises.length, 'occasions...');
         const results = await Promise.all(occasionPromises);
+        console.log('🎉 Successfully loaded occasions:', results);
         setOccasions(results as Occasion[]);
       } catch (error) {
-        console.error('Failed to load occasions:', error);
+        console.error('❌ Failed to load occasions:', error);
       } finally {
         setLoading(false);
       }
@@ -86,16 +123,38 @@ export default function Home() {
     loadOccasions();
   }, [totalOccasions, publicClient]);
 
+  // 如果未登录，不渲染任何内容（会重定向到登录页）
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-black flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-black text-white">
       <NetworkSwitcher />
       <div className="container mx-auto px-4 py-8 pt-16">
         {/* Header */}
         <header className="flex justify-between items-center mb-12">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
-            🎫 NFT Ticket Marketplace
-          </h1>
+          <div>
+            <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
+              🎫 NFT Ticket Marketplace
+            </h1>
+            {isLoggedIn && (
+              <p className="text-sm text-gray-400 mt-2">Welcome back, {username}!</p>
+            )}
+          </div>
           <div className="flex items-center space-x-4">
+            {isLoggedIn && (
+              <button
+                onClick={handleLogout}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+              >
+                Logout
+              </button>
+            )}
             <ConnectButton />
             
             {isConnected && (
@@ -210,10 +269,10 @@ export default function Home() {
         </div>
 
         {/* Contract Info */}
-        {chain?.id === sepolia.id && (
+        {chain?.id === baseSepolia.id && (
           <div className="mt-12 text-center text-sm text-gray-400">
-            <p>Contract: <a href={`https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{CONTRACT_ADDRESS}</a></p>
-            <p className="mt-1">Network: Sepolia Testnet (Chain ID: {sepolia.id})</p>
+            <p>Contract: <a href={`https://sepolia.basescan.org/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{CONTRACT_ADDRESS}</a></p>
+            <p className="mt-1">Network: Base Sepolia Testnet (Chain ID: {baseSepolia.id})</p>
           </div>
         )}
       </div>
