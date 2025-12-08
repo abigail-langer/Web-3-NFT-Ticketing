@@ -1,15 +1,15 @@
 {
-  "network": "baseSepolia",
+  "network": "sepolia",
   "deployer": "0x5ce38CfB6698c437d76436DF6d5f30355FDE6a8c",
-  "timestamp": "2025-12-02T06:48:21.876Z",
+  "timestamp": "2025-12-05T01:38:25.379Z",
   "contracts": {
     "TicketContract": {
-      "address": "0xD274e66aB4eFa2F520fd3Ab6384d243B59bA4179",
+      "address": "0x14B3DE31C193c041Ee5577675a46951C17a50525",
       "name": "Event Ticket",
       "symbol": "TICKET"
     },
     "POAPToken": {
-      "address": "0x0DC343B4A3D35f1fec010F10B438b1926Fc065f3",
+      "address": "0xe4462c1EEA07D470F631a63815c92eF3F0e8cf90",
       "name": "Event Attendance POAP",
       "symbol": "POAP"
     }
@@ -19,8 +19,9 @@
     "name": "Web3 Conference 2025",
     "cost": "0.01",
     "maxTickets": 100,
-    "publicSaleStart": 1764661696,
-    "eventEndTime": 1765262896,
+    "earlySaleStart": 1764900480,
+    "publicSaleStart": 1764902280,
+    "eventEndTime": 1765503480,
     "prioritySeats": [
       1,
       2,

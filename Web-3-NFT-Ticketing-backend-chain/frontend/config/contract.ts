@@ -1,5 +1,5 @@
 // 合约配置
-export const CONTRACT_ADDRESS = '0xD274e66aB4eFa2F520fd3Ab6384d243B59bA4179' as const;
+export const CONTRACT_ADDRESS = '0x34f11d70FF29540D1824bEE46Cfec7925Bc83265' as const;
 export const POAP_CONTRACT_ADDRESS = '0x0DC343B4A3D35f1fec010F10B438b1926Fc065f3' as const;
 
 // 合约 ABI - 只包含前端需要的函数
@@ -90,7 +90,11 @@ export const CONTRACT_ABI = [
           { internalType: 'string', name: 'time', type: 'string' },
           { internalType: 'string', name: 'location', type: 'string' },
           { internalType: 'address', name: 'organizer', type: 'address' },
-          { internalType: 'bool', name: 'resellable', type: 'bool' }
+          { internalType: 'bool', name: 'resellable', type: 'bool' },
+          { internalType: 'uint256', name: 'eventEndTime', type: 'uint256' },
+          { internalType: 'uint256', name: 'earlySaleStart', type: 'uint256' },
+          { internalType: 'uint256', name: 'publicSaleStart', type: 'uint256' },
+          { internalType: 'bool', name: 'poapEnabled', type: 'bool' }
         ],
         internalType: 'struct TicketContract.Occasion',
         name: '',
@@ -198,6 +202,7 @@ export const CONTRACT_ABI = [
       { internalType: 'string', name: '_location', type: 'string' },
       { internalType: 'bool', name: '_resellable', type: 'bool' },
       { internalType: 'uint256', name: '_eventEndTime', type: 'uint256' },
+      { internalType: 'uint256', name: '_earlySaleStart', type: 'uint256' },
       { internalType: 'uint256', name: '_publicSaleStart', type: 'uint256' },
       { internalType: 'bool', name: '_poapEnabled', type: 'bool' }
     ],
@@ -268,6 +273,23 @@ export const CONTRACT_ABI = [
   {
     inputs: [{ internalType: 'uint256', name: '_occasionId', type: 'uint256' }],
     name: 'getPrioritySeats',
+    outputs: [{ internalType: 'uint256[]', name: '', type: 'uint256[]' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [
+      { internalType: 'uint256', name: '_occasionId', type: 'uint256' },
+      { internalType: 'uint256[]', name: '_prioritySeats', type: 'uint256[]' }
+    ],
+    name: 'setPrioritySeats',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [{ internalType: 'address', name: '_user', type: 'address' }],
+    name: 'getUserTickets',
     outputs: [{ internalType: 'uint256[]', name: '', type: 'uint256[]' }],
     stateMutability: 'view',
     type: 'function'

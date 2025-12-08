@@ -6,8 +6,8 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'NFT Ticket System - Base Sepolia',
-  description: 'Decentralized event ticketing system powered by NFTs on Base Sepolia',
+  title: 'NFT Ticket System - Sepolia',
+  description: 'Decentralized event ticketing system powered by NFTs on Sepolia',
 };
 
 export default function RootLayout({

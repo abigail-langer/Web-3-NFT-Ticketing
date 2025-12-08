@@ -47,9 +47,10 @@ async function main() {
 
   // ========== 4. 创建测试活动 ==========
   console.log("📝 步骤 4: 创建测试活动...");
-  
+
   const now = Math.floor(Date.now() / 1000);
-  const publicSaleStart = now + 3600; // 1小时后公开售票
+  const earlySaleStart = now + 1800; // 30分钟后早鸟票开售
+  const publicSaleStart = now + 3600; // 1小时后普通票开售
   const eventEndTime = now + 86400 * 7; // 7天后活动结束
 
   const tx3 = await ticketContract.list(
@@ -61,7 +62,8 @@ async function main() {
     "Shanghai, China",                 // location
     true,                              // resellable
     eventEndTime,                      // eventEndTime
-    publicSaleStart,                   // publicSaleStart
+    earlySaleStart,                    // earlySaleStart (5+ badges)
+    publicSaleStart,                   // publicSaleStart (everyone)
     true                               // poapEnabled
   );
   await tx3.wait();
@@ -71,7 +73,8 @@ async function main() {
   console.log("   - 座位数: 100");
   console.log("   - 可转卖: 是");
   console.log("   - POAP奖励: 启用");
-  console.log("   - 公开售票时间:", new Date(publicSaleStart * 1000).toLocaleString());
+  console.log("   - 早鸟票开售时间:", new Date(earlySaleStart * 1000).toLocaleString(), "(需5+徽章)");
+  console.log("   - 普通票开售时间:", new Date(publicSaleStart * 1000).toLocaleString());
   console.log("");
 
   // ========== 5. 设置优先座位 ==========
@@ -132,6 +135,7 @@ async function main() {
       name: "Web3 Conference 2025",
       cost: "0.01",
       maxTickets: 100,
+      earlySaleStart: earlySaleStart,
       publicSaleStart: publicSaleStart,
       eventEndTime: eventEndTime,
       prioritySeats: prioritySeats

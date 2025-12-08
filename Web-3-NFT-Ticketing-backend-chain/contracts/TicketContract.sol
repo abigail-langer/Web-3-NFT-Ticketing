@@ -34,7 +34,8 @@ contract TicketContract is ERC721, ReentrancyGuard {
         address organizer;      // 活动组织者
         bool resellable;        // 是否允许转卖
         uint256 eventEndTime;   // 活动结束时间（Unix时间戳）
-        uint256 publicSaleStart; // 公开售票开始时间（POAP持有者可提前购买）
+        uint256 earlySaleStart; // 早鸟票发售时间（5个以上徽章持有者可购买）
+        uint256 publicSaleStart; // 普通票发售时间（所有人可购买）
         bool poapEnabled;       // 是否启用POAP奖励
     }
 
@@ -107,7 +108,8 @@ contract TicketContract is ERC721, ReentrancyGuard {
      * @param _location 活动地点
      * @param _resellable 是否允许转卖
      * @param _eventEndTime 活动结束时间（Unix时间戳）
-     * @param _publicSaleStart 公开售票时间（POAP持有者可提前购买）
+     * @param _earlySaleStart 早鸟票发售时间（5个以上徽章持有者可购买，可选填0表示不设置）
+     * @param _publicSaleStart 普通票发售时间（所有人可购买）
      * @param _poapEnabled 是否启用POAP奖励
      */
     function list(
@@ -119,12 +121,16 @@ contract TicketContract is ERC721, ReentrancyGuard {
         string memory _location,
         bool _resellable,
         uint256 _eventEndTime,
+        uint256 _earlySaleStart,
         uint256 _publicSaleStart,
         bool _poapEnabled
     ) public {
         require(_eventEndTime > block.timestamp, "Event end time must be in future");
         require(_publicSaleStart <= _eventEndTime, "Public sale must start before event ends");
-        
+        if (_earlySaleStart > 0) {
+            require(_earlySaleStart <= _publicSaleStart, "Early sale must start before or equal to public sale");
+        }
+
         totalOccasions++;
         occasions[totalOccasions] = Occasion(
             totalOccasions,
@@ -138,10 +144,11 @@ contract TicketContract is ERC721, ReentrancyGuard {
             msg.sender,      // 调用者即为组织者
             _resellable,
             _eventEndTime,
+            _earlySaleStart,
             _publicSaleStart,
             _poapEnabled
         );
-        
+
         emit OccasionCreated(totalOccasions, _name, msg.sender, _resellable, _poapEnabled);
     }
 
@@ -183,32 +190,45 @@ contract TicketContract is ERC721, ReentrancyGuard {
     }
 
     /**
+     * @dev 检查用户是否有购票权限
+     */
+    function _checkSalePermission(uint256 _occasionId, address _buyer) internal view {
+        Occasion storage occasion = occasions[_occasionId];
+        uint256 userPOAPBalance = getUserPOAPBalance(_buyer);
+
+        // 如果设置了早鸟票时间
+        if (occasion.earlySaleStart > 0 && block.timestamp >= occasion.earlySaleStart && block.timestamp < occasion.publicSaleStart) {
+            // 早鸟票期间：需要持有5个以上徽章
+            require(userPOAPBalance >= 5, "Need 5+ badges for early bird sale");
+        } else if (block.timestamp < occasion.publicSaleStart) {
+            // 还未到任何发售时间
+            revert("Sale has not started yet");
+        }
+        // 普通发售时间：所有人都可以购买（block.timestamp >= occasion.publicSaleStart）
+    }
+
+    /**
      * @dev 从活动组织者处购买门票（一级市场，免费，只需gas）
      * @param _id 活动ID
      * @param _seat 座位号
      */
     function mint(uint256 _id, uint256 _seat) public payable nonReentrant {
         require(_id != 0 && _id <= totalOccasions, "Invalid occasion ID");
-        
         Occasion storage occasion = occasions[_id];
-        
-        // 检查购票时间权限（POAP持有者优先）
-        uint256 userPOAPBalance = getUserPOAPBalance(msg.sender);
-        if (userPOAPBalance == 0) {
-            require(block.timestamp >= occasion.publicSaleStart, "POAP holders only at this time");
-        }
-        // POAP持有者可以提前购买
-        
+
+        // 检查购票时间权限
+        _checkSalePermission(_id, msg.sender);
+
         // 从组织者直接购买门票免费（cost设为0），只需支付gas费
         require(msg.value >= occasion.cost, "Insufficient payment");
 
         // 检查座位
         require(seatTaken[_id][_seat] == address(0), "Seat already taken");
         require(_seat > 0 && _seat <= occasion.maxTickets, "Invalid seat number");
-        
+
         // 检查优先座位权限
         if (isPrioritySeat(_id, _seat)) {
-            require(userPOAPBalance > 0, "Priority seat reserved for POAP holders");
+            require(getUserPOAPBalance(msg.sender) > 0, "Priority seat reserved for POAP holders");
         }
 
         // 更新状态
@@ -357,6 +377,34 @@ contract TicketContract is ERC721, ReentrancyGuard {
      */
     function getTicketInfo(uint256 _tokenId) public view returns (uint256 occasionId, uint256 seat) {
         return (tokenToOccasion[_tokenId], tokenToSeat[_tokenId]);
+    }
+
+    /**
+     * @dev 获取用户拥有的所有tickets（查询所有tokenId来找出属于用户的）
+     * @param _user 用户地址
+     */
+    function getUserTickets(address _user) public view returns (uint256[] memory) {
+        uint256[] memory userTickets = new uint256[](totalSupply);
+        uint256 count = 0;
+
+        // 遍历所有的tokenId（从1到totalSupply）
+        for (uint256 tokenId = 1; tokenId <= totalSupply; tokenId++) {
+            // 检查这个tokenId是否属于用户
+            try this.ownerOf(tokenId) returns (address ticketOwner) {
+                if (ticketOwner == _user) {
+                    userTickets[count] = tokenId;
+                    count++;
+                }
+            } catch {}
+        }
+
+        // 返回实际的用户tickets数组（去掉空位）
+        uint256[] memory result = new uint256[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = userTickets[i];
+        }
+
+        return result;
     }
 
     /**

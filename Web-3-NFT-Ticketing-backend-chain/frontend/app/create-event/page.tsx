@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useState, useEffect } from 'react';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useReadContract } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../config/contract';
@@ -17,13 +17,71 @@ export default function CreateEventPage() {
     time: '',
     location: '',
     resellable: true,
+    earlySaleDate: '',
+    earlySaleTime: '',
+    publicSaleDate: '',
+    publicSaleTime: '',
+    eventEndDate: '',
+    eventEndTime: '',
+    enableEarlySale: false,
+    enablePOAP: false,
+    enablePrioritySeats: false,
   });
+
+  const [settingPrioritySeats, setSettingPrioritySeats] = useState(false);
+  const [prioritySeatsDone, setPrioritySeatsDone] = useState(false);
 
   const { isConnected } = useAccount();
   const router = useRouter();
-  
+  const publicClient = usePublicClient();
+
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  // 读取totalOccasions来获取新创建的活动ID
+  const { data: totalOccasions, refetch: refetchTotalOccasions } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'totalOccasions',
+  });
+
+  // 当活动创建成功后,设置优先座位
+  useEffect(() => {
+    const setPrioritySeats = async () => {
+      if (isSuccess && formData.enablePrioritySeats && !settingPrioritySeats && !prioritySeatsDone) {
+        setSettingPrioritySeats(true);
+
+        try {
+          // 重新获取totalOccasions
+          const result = await refetchTotalOccasions();
+          const newEventId = result.data;
+
+          if (newEventId) {
+            console.log(`Setting priority seats for event #${newEventId}`);
+
+            // 调用setPrioritySeats
+            const prioritySeats = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+            writeContract({
+              address: CONTRACT_ADDRESS,
+              abi: CONTRACT_ABI,
+              functionName: 'setPrioritySeats',
+              args: [newEventId, prioritySeats],
+            });
+
+            setPrioritySeatsDone(true);
+          }
+        } catch (error) {
+          console.error('Failed to set priority seats:', error);
+          alert('Event created but failed to set priority seats. You can set them manually later.');
+        } finally {
+          setSettingPrioritySeats(false);
+        }
+      }
+    };
+
+    setPrioritySeats();
+  }, [isSuccess, formData.enablePrioritySeats, settingPrioritySeats, prioritySeatsDone, refetchTotalOccasions, writeContract]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,9 +91,28 @@ export default function CreateEventPage() {
       return;
     }
 
+    if (!formData.publicSaleDate || !formData.publicSaleTime) {
+      alert('Please set the public sale date and time');
+      return;
+    }
+
+    if (!formData.eventEndDate || !formData.eventEndTime) {
+      alert('Please set the event end date and time');
+      return;
+    }
+
     try {
       const costInWei = formData.cost === '0' ? 0n : parseEther(formData.cost);
-      
+
+      // Parse dates
+      const publicSaleTimestamp = Math.floor(new Date(`${formData.publicSaleDate}T${formData.publicSaleTime}`).getTime() / 1000);
+      const eventEndTimestamp = Math.floor(new Date(`${formData.eventEndDate}T${formData.eventEndTime}`).getTime() / 1000);
+
+      let earlySaleTimestamp = 0;
+      if (formData.enableEarlySale && formData.earlySaleDate && formData.earlySaleTime) {
+        earlySaleTimestamp = Math.floor(new Date(`${formData.earlySaleDate}T${formData.earlySaleTime}`).getTime() / 1000);
+      }
+
       writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -48,9 +125,10 @@ export default function CreateEventPage() {
           formData.time,
           formData.location,
           formData.resellable,
-          BigInt(Math.floor(Date.now() / 1000) + 86400 * 30), // Default: End time 30 days from now
-          BigInt(Math.floor(Date.now() / 1000)), // Default: Public sale starts immediately
-          false, // Default: POAP disabled
+          BigInt(eventEndTimestamp),
+          BigInt(earlySaleTimestamp),
+          BigInt(publicSaleTimestamp),
+          formData.enablePOAP,
         ],
       });
     } catch (error) {
@@ -59,7 +137,11 @@ export default function CreateEventPage() {
     }
   };
 
-  if (isSuccess) {
+  if (isSuccess && !formData.enablePrioritySeats) {
+    setTimeout(() => router.push('/'), 2000);
+  }
+
+  if (isSuccess && formData.enablePrioritySeats && prioritySeatsDone) {
     setTimeout(() => router.push('/'), 2000);
   }
 
@@ -89,6 +171,12 @@ export default function CreateEventPage() {
         {isSuccess ? (
           <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-8 text-center">
             <h2 className="text-2xl font-bold mb-4">✅ Event Created Successfully!</h2>
+            {settingPrioritySeats && (
+              <p className="text-yellow-300 mb-2">⏳ Setting priority seats (1-10)...</p>
+            )}
+            {prioritySeatsDone && (
+              <p className="text-green-300 mb-2">✅ Priority seats configured!</p>
+            )}
             <p>Redirecting to home page...</p>
             <p className="text-sm text-gray-400 mt-4">
               Transaction: <a href={`https://sepolia.etherscan.io/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{hash?.slice(0, 10)}...{hash?.slice(-8)}</a>
@@ -174,20 +262,151 @@ export default function CreateEventPage() {
               />
             </div>
 
-            <div className="flex items-center space-x-3">
-              <input
-                type="checkbox"
-                id="resellable"
-                checked={formData.resellable}
-                onChange={(e) => setFormData({ ...formData, resellable: e.target.checked })}
-                className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="resellable" className="text-sm">
-                ♻️ Allow ticket resale on secondary market
-                <span className="block text-xs text-gray-400 mt-1">
-                  You'll receive 5% royalty on all secondary sales
-                </span>
-              </label>
+            {/* Sale Times */}
+            <div className="border-t border-white/20 pt-6">
+              <h3 className="text-lg font-semibold mb-4">📅 Sale Schedule</h3>
+
+              {/* Enable Early Bird Sale */}
+              <div className="flex items-center space-x-3 mb-4">
+                <input
+                  type="checkbox"
+                  id="enableEarlySale"
+                  checked={formData.enableEarlySale}
+                  onChange={(e) => setFormData({ ...formData, enableEarlySale: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="enableEarlySale" className="text-sm">
+                  🐦 Enable Early Bird Sale (Requires 5+ Badges)
+                  <span className="block text-xs text-gray-400 mt-1">
+                    Users with 5+ POAPs can buy tickets during early bird period
+                  </span>
+                </label>
+              </div>
+
+              {/* Early Bird Sale Time */}
+              {formData.enableEarlySale && (
+                <div className="grid md:grid-cols-2 gap-4 mb-4 bg-blue-500/10 p-4 rounded-lg border border-blue-500/30">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Early Bird Sale Date (Year-Month-Day)</label>
+                    <input
+                      type="date"
+                      value={formData.earlySaleDate}
+                      onChange={(e) => setFormData({ ...formData, earlySaleDate: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Early Bird Sale Time</label>
+                    <input
+                      type="time"
+                      value={formData.earlySaleTime}
+                      onChange={(e) => setFormData({ ...formData, earlySaleTime: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Public Sale Time */}
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Public Sale Date (Year-Month-Day) *</label>
+                  <input
+                    type="date"
+                    value={formData.publicSaleDate}
+                    onChange={(e) => setFormData({ ...formData, publicSaleDate: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Public Sale Time *</label>
+                  <input
+                    type="time"
+                    value={formData.publicSaleTime}
+                    onChange={(e) => setFormData({ ...formData, publicSaleTime: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Event End Time */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Event End Date (Year-Month-Day) *</label>
+                  <input
+                    type="date"
+                    value={formData.eventEndDate}
+                    onChange={(e) => setFormData({ ...formData, eventEndDate: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Event End Time *</label>
+                  <input
+                    type="time"
+                    value={formData.eventEndTime}
+                    onChange={(e) => setFormData({ ...formData, eventEndTime: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Other Options */}
+            <div className="border-t border-white/20 pt-6">
+              <h3 className="text-lg font-semibold mb-4">⚙️ Additional Options</h3>
+
+              <div className="flex items-center space-x-3 mb-4">
+                <input
+                  type="checkbox"
+                  id="resellable"
+                  checked={formData.resellable}
+                  onChange={(e) => setFormData({ ...formData, resellable: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="resellable" className="text-sm">
+                  ♻️ Allow ticket resale on secondary market
+                  <span className="block text-xs text-gray-400 mt-1">
+                    You'll receive 5% royalty on all secondary sales
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-3 mb-4">
+                <input
+                  type="checkbox"
+                  id="enablePOAP"
+                  checked={formData.enablePOAP}
+                  onChange={(e) => setFormData({ ...formData, enablePOAP: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="enablePOAP" className="text-sm">
+                  🎖️ Enable POAP (Proof of Attendance) Rewards
+                  <span className="block text-xs text-gray-400 mt-1">
+                    Attendees can claim a commemorative NFT badge after checking in
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="enablePrioritySeats"
+                  checked={formData.enablePrioritySeats}
+                  onChange={(e) => setFormData({ ...formData, enablePrioritySeats: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="enablePrioritySeats" className="text-sm">
+                  ⭐ Set Seats 1-10 as Priority Seats (Requires 5+ POAPs)
+                  <span className="block text-xs text-gray-400 mt-1">
+                    These seats will require 5+ POAP badges to purchase, even during public sale
+                  </span>
+                </label>
+              </div>
             </div>
 
             <button

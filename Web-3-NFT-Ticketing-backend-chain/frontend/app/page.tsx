@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useSwitchChain, useReadContract, usePublicClient } from 'wagmi';
-import { baseSepolia } from 'wagmi/chains';
+import { sepolia } from 'wagmi/chains';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../config/contract';
 import { formatEther } from 'viem';
 
@@ -27,15 +27,15 @@ const NetworkSwitcher = () => {
     const { chain } = useAccount();
     const { switchChain } = useSwitchChain();
 
-    if (chain && chain.id !== baseSepolia.id) {
+    if (chain && chain.id !== sepolia.id) {
         return (
             <div className="fixed top-0 left-0 w-full bg-yellow-500 text-black p-2 text-center z-50 flex justify-center items-center space-x-4">
-                <span>⚠️ Wrong Network! Please switch to Base Sepolia Testnet.</span>
+                <span>⚠️ Wrong Network! Please switch to Sepolia Testnet.</span>
                 <button
-                    onClick={() => switchChain({ chainId: baseSepolia.id })}
+                    onClick={() => switchChain({ chainId: sepolia.id })}
                     className="bg-black text-white font-bold py-1 px-3 rounded-lg hover:bg-gray-800"
                 >
-                    Switch to Base Sepolia
+                    Switch to Sepolia
                 </button>
             </div>
         );
@@ -269,10 +269,10 @@ export default function Home() {
         </div>
 
         {/* Contract Info */}
-        {chain?.id === baseSepolia.id && (
+        {chain?.id === sepolia.id && (
           <div className="mt-12 text-center text-sm text-gray-400">
-            <p>Contract: <a href={`https://sepolia.basescan.org/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{CONTRACT_ADDRESS}</a></p>
-            <p className="mt-1">Network: Base Sepolia Testnet (Chain ID: {baseSepolia.id})</p>
+            <p>Contract: <a href={`https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{CONTRACT_ADDRESS}</a></p>
+            <p className="mt-1">Network: Sepolia Testnet (Chain ID: {sepolia.id})</p>
           </div>
         )}
       </div>

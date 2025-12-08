@@ -1,6 +1,6 @@
 "use client";
 
-// Base Sepolia Network Configuration
+// Sepolia Network Configuration
 import "@rainbow-me/rainbowkit/styles.css";
 import { RainbowKitProvider, connectorsForWallets } from "@rainbow-me/rainbowkit";
 import {
@@ -11,12 +11,12 @@ import {
   coinbaseWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-const baseSepoliaRpcUrl = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL?.trim();
+const sepoliaRpcUrl = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL?.trim();
 
 // Only enable WalletConnect when a valid 32-character projectId is provided
 const enableWalletConnect = typeof projectId === 'string' && projectId.length === 32;
@@ -60,9 +60,9 @@ const connectors = connectorsForWallets(
 // Explicitly create the wagmi config
 const config = createConfig({
   connectors,
-  chains: [baseSepolia],
+  chains: [sepolia],
   transports: {
-    [baseSepolia.id]: http(baseSepoliaRpcUrl && baseSepoliaRpcUrl.length > 0 ? baseSepoliaRpcUrl : "https://sepolia.base.org"),
+    [sepolia.id]: http(sepoliaRpcUrl && sepoliaRpcUrl.length > 0 ? sepoliaRpcUrl : "https://rpc.sepolia.org"),
   },
   ssr: true,
 });

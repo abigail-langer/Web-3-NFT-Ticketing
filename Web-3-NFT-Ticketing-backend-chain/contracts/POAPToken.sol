@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
  * @dev 不可转让的出席证明代币（Proof of Attendance Protocol）
  * 用户参加活动后可领取，持有POAP的用户在未来购票时享有优先权
  */
-contract POAPToken is ERC721, Ownable {
+contract POAPToken is ERC721Enumerable, Ownable {
     using Strings for uint256;
 
     uint256 public nextTokenId = 1;
@@ -162,14 +162,14 @@ contract POAPToken is ERC721, Ownable {
         address to,
         uint256 tokenId,
         address auth
-    ) internal virtual override returns (address) {
+    ) internal virtual override(ERC721Enumerable) returns (address) {
         address from = super._update(to, tokenId, auth);
-        
+
         // 禁止转让（排除mint和burn）
         if (from != address(0) && to != address(0)) {
             revert("POAP tokens are non-transferable (Soulbound)");
         }
-        
+
         return from;
     }
 
@@ -179,5 +179,18 @@ contract POAPToken is ERC721, Ownable {
     function burn(uint256 tokenId) external {
         require(ownerOf(tokenId) == msg.sender, "Not token owner");
         _burn(tokenId);
+    }
+
+    /**
+     * @dev 重写 supportsInterface 以支持 ERC721Enumerable
+     */
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(ERC721Enumerable)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 }

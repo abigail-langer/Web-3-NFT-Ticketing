@@ -90,23 +90,32 @@ export default function MyTicketsPage() {
 
   const loadMyTickets = async () => {
     if (!address || !publicClient) return;
-    
+
     setLoading(true);
     try {
-      // 🚀 优先从数据库缓存加载
+      // 🚀 尝试从数据库缓存加载
       console.log('📦 Loading tickets from database cache...');
-      const cacheResponse = await fetch(`http://localhost:3001/api/tickets/user/${address}`);
-      const cacheData = await cacheResponse.json();
-      
-      if (cacheData.tickets && cacheData.tickets.length > 0) {
-        console.log(`✅ Found ${cacheData.tickets.length} tickets in cache`);
-        
+      let cacheData = { tickets: [] };
+      let useCache = false;
+
+      try {
+        const cacheResponse = await fetch(`http://localhost:3001/api/tickets/user/${address}`);
+        cacheData = await cacheResponse.json();
+        useCache = cacheData.tickets && cacheData.tickets.length > 0;
+        if (useCache) {
+          console.log(`✅ Found ${cacheData.tickets.length} tickets in cache`);
+        }
+      } catch (cacheError) {
+        console.warn('📝 Database cache unavailable, loading from blockchain:', cacheError);
+      }
+
+      if (useCache) {
         // 从缓存数据构建票据列表，只需要查询活动信息和挂单状态
         const ticketPromises = cacheData.tickets.map(async (cachedTicket: any) => {
           try {
             const tokenId = BigInt(cachedTicket.token_id);
             const occasionId = BigInt(cachedTicket.occasion_id);
-            
+
             // 验证当前拥有者（防止票已转让）
             const currentOwner = await publicClient.readContract({
               address: CONTRACT_ADDRESS,
@@ -151,23 +160,110 @@ export default function MyTicketsPage() {
               hasClaimed: cachedTicket.has_claimed_poap || false,
               isCheckedIn: cachedTicket.is_checked_in || false,
             };
-        } catch (error) {
-          console.error('Error loading ticket:', error);
-          return null;
-        }
-      });
+          } catch (error) {
+            console.error('Error loading ticket:', error);
+            return null;
+          }
+        });
 
         const results = await Promise.all(ticketPromises);
         const myTickets = results.filter((t): t is TicketInfo => t !== null);
         setTickets(myTickets);
       } else {
-        // 数据库没有缓存，显示空列表
-        console.log('⚠️ No tickets found in cache');
-        setTickets([]);
+        // 从区块链加载：获取用户拥有的所有NFT
+        console.log('🔍 Querying blockchain for user tickets...');
+
+        try {
+          // 直接从合约获取用户的tickets
+          console.log(`Calling getUserTickets for address: ${address}`);
+
+          let userTicketIds: bigint[] = [];
+          try {
+            userTicketIds = await publicClient.readContract({
+              address: CONTRACT_ADDRESS,
+              abi: CONTRACT_ABI,
+              functionName: 'getUserTickets',
+              args: [address],
+            }) as bigint[];
+            console.log(`✅ getUserTickets returned ${userTicketIds.length} tickets`);
+          } catch (contractError) {
+            console.error('Error calling getUserTickets:', contractError);
+            userTicketIds = [];
+          }
+
+          if (userTicketIds && userTicketIds.length > 0) {
+            console.log(`✅ Found ${userTicketIds.length} tickets on blockchain`);
+
+            // 为每个ticket获取详细信息
+            const ticketPromises = userTicketIds.map(async (tokenId) => {
+              try {
+                // 获取ticket的活动和座位信息
+                const ticketInfo = await publicClient.readContract({
+                  address: CONTRACT_ADDRESS,
+                  abi: CONTRACT_ABI,
+                  functionName: 'getTicketInfo',
+                  args: [tokenId],
+                }) as { occasionId: bigint; seat: bigint };
+
+                // 获取活动信息
+                const occasion = await publicClient.readContract({
+                  address: CONTRACT_ADDRESS,
+                  abi: CONTRACT_ABI,
+                  functionName: 'getOccasion',
+                  args: [ticketInfo.occasionId],
+                }) as any;
+
+                // 获取挂单信息
+                const listing = await publicClient.readContract({
+                  address: CONTRACT_ADDRESS,
+                  abi: CONTRACT_ABI,
+                  functionName: 'getListing',
+                  args: [tokenId],
+                }) as any;
+
+                // 获取检票状态
+                const checkedIn = await publicClient.readContract({
+                  address: CONTRACT_ADDRESS,
+                  abi: CONTRACT_ABI,
+                  functionName: 'isCheckedIn',
+                  args: [tokenId],
+                }) as boolean;
+
+                return {
+                  tokenId,
+                  occasionId: ticketInfo.occasionId,
+                  seat: ticketInfo.seat,
+                  occasionName: occasion.name,
+                  occasionDate: occasion.date,
+                  occasionLocation: occasion.location,
+                  isListed: listing.isActive,
+                  listingPrice: listing.price,
+                  resellable: occasion.resellable,
+                  eventEndTime: occasion.eventEndTime || BigInt(0),
+                  poapEnabled: occasion.poapEnabled || false,
+                  hasClaimed: false, // 区块链查询不支持,默认false
+                  isCheckedIn: checkedIn,
+                };
+              } catch (error) {
+                console.error(`Error loading ticket ${tokenId}:`, error);
+                return null;
+              }
+            });
+
+            const results = await Promise.all(ticketPromises);
+            const myTickets = results.filter((t): t is TicketInfo => t !== null);
+            setTickets(myTickets);
+          } else {
+            console.log('⚠️ No tickets found on blockchain');
+            setTickets([]);
+          }
+        } catch (error) {
+          console.error('Failed to load tickets from blockchain:', error);
+          setTickets([]);
+        }
       }
     } catch (error) {
-      console.error('Failed to load tickets from cache:', error);
-      // 缓存加载失败，显示空列表（不再回退到区块链查询）
+      console.error('Failed to load tickets:', error);
       setTickets([]);
     } finally {
       setLoading(false);
