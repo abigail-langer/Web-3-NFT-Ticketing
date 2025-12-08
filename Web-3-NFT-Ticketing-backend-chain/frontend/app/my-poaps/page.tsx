@@ -31,16 +31,25 @@ export default function MyPOAPsPage() {
 
   const loadMyPOAPs = async () => {
     if (!address || !publicClient) return;
-    
+
     setLoading(true);
     try {
       // 获取用户的 POAP 数量
-      const balance = await publicClient.readContract({
-        address: POAP_CONTRACT_ADDRESS,
-        abi: POAP_ABI,
-        functionName: 'balanceOf',
-        args: [address],
-      }) as bigint;
+      let balance: bigint;
+      try {
+        balance = await publicClient.readContract({
+          address: POAP_CONTRACT_ADDRESS,
+          abi: POAP_ABI,
+          functionName: 'balanceOf',
+          args: [address],
+        }) as bigint;
+      } catch (error) {
+        console.warn('POAP contract not available or invalid address:', error);
+        console.log('POAP_CONTRACT_ADDRESS:', POAP_CONTRACT_ADDRESS);
+        setPoaps([]);
+        setLoading(false);
+        return;
+      }
 
       if (balance === BigInt(0)) {
         setPoaps([]);
@@ -77,6 +86,7 @@ export default function MyPOAPsPage() {
       setPoaps(results);
     } catch (error) {
       console.error('Failed to load POAPs:', error);
+      setPoaps([]);
     } finally {
       setLoading(false);
     }

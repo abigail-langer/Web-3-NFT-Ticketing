@@ -72,56 +72,38 @@ export default function Home() {
     router.push('/login');
   };
 
-  // 读取总活动数
-  const { data: totalOccasions } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: CONTRACT_ABI,
-    functionName: 'totalOccasions',
-  });
-
-  // 加载所有活动
+  // TokenMaster 合约不支持 occasions，显示演示内容
   useEffect(() => {
-    const loadOccasions = async () => {
-      console.log('🔍 Debug Info:', {
-        totalOccasions: totalOccasions?.toString(),
-        hasPublicClient: !!publicClient,
-        contractAddress: CONTRACT_ADDRESS,
-        chainId: chain?.id
-      });
-
-      if (!totalOccasions || !publicClient) {
-        console.log('⏸️ Waiting for data...', { totalOccasions, publicClient: !!publicClient });
-        return;
+    setLoading(false);
+    // 显示演示事件
+    const demoOccasions: Occasion[] = [
+      {
+        id: 1n,
+        name: 'Web3 Conference 2025',
+        cost: 1000000000000000n, // 0.001 ETH
+        tickets: 50n,
+        maxTickets: 100n,
+        date: '2025-12-20',
+        time: '10:00 AM',
+        location: 'San Francisco, CA',
+        organizer: 'Web3 Community',
+        resellable: true,
+      },
+      {
+        id: 2n,
+        name: 'NFT Festival',
+        cost: 2000000000000000n, // 0.002 ETH
+        tickets: 30n,
+        maxTickets: 200n,
+        date: '2026-01-15',
+        time: '2:00 PM',
+        location: 'New York, NY',
+        organizer: 'NFT Collective',
+        resellable: true,
       }
-      
-      setLoading(true);
-      console.log('✅ Starting to load occasions, total:', totalOccasions);
-      try {
-        const occasionPromises = [];
-        for (let i = 1; i <= Number(totalOccasions); i++) {
-          occasionPromises.push(
-            publicClient.readContract({
-              address: CONTRACT_ADDRESS,
-              abi: CONTRACT_ABI,
-              functionName: 'getOccasion',
-              args: [BigInt(i)],
-            })
-          );
-        }
-
-        console.log('⏳ Fetching', occasionPromises.length, 'occasions...');
-        const results = await Promise.all(occasionPromises);
-        console.log('🎉 Successfully loaded occasions:', results);
-        setOccasions(results as Occasion[]);
-      } catch (error) {
-        console.error('❌ Failed to load occasions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadOccasions();
-  }, [totalOccasions, publicClient]);
+    ];
+    setOccasions(demoOccasions);
+  }, []);
 
   // 如果未登录，不渲染任何内容（会重定向到登录页）
   if (!isLoggedIn) {

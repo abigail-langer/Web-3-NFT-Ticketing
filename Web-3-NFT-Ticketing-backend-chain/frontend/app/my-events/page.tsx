@@ -27,47 +27,13 @@ export default function MyEventsPage() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
 
-  // 读取总活动数
-  const { data: totalOccasions } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: CONTRACT_ABI,
-    functionName: 'totalOccasions',
-  });
-
   // 加载并筛选我举办的活动
   useEffect(() => {
     const loadMyEvents = async () => {
-      if (!totalOccasions || !publicClient || !address) {
-        setLoading(false);
-        return;
-      }
-      
-      setLoading(true);
-      try {
-        const occasionPromises = [];
-        for (let i = 1; i <= Number(totalOccasions); i++) {
-          occasionPromises.push(
-            publicClient.readContract({
-              address: CONTRACT_ADDRESS,
-              abi: CONTRACT_ABI,
-              functionName: 'getOccasion',
-              args: [BigInt(i)],
-            })
-          );
-        }
-        
-        const results = await Promise.all(occasionPromises);
-        // 筛选出我是组织者的活动
-        const myHostedEvents = (results as Occasion[]).filter(
-          (occasion) => occasion.organizer.toLowerCase() === address.toLowerCase()
-        );
-        
-        setMyEvents(myHostedEvents);
-      } catch (error) {
-        console.error('Failed to load my events:', error);
-      } finally {
-        setLoading(false);
-      }
+      // TokenMaster 合约不支持查询 occasions，显示演示信息
+      setLoading(false);
+      console.log('TokenMaster contract does not support event queries');
+      setMyEvents([]);
     };
 
     if (isConnected) {
@@ -75,7 +41,7 @@ export default function MyEventsPage() {
     } else {
       setLoading(false);
     }
-  }, [totalOccasions, publicClient, address, isConnected]);
+  }, [isConnected]);
 
   if (!isConnected) {
     return null;

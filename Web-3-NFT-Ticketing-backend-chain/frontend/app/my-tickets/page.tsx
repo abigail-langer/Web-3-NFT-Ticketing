@@ -93,175 +93,80 @@ export default function MyTicketsPage() {
 
     setLoading(true);
     try {
-      // 🚀 尝试从数据库缓存加载
-      console.log('📦 Loading tickets from database cache...');
-      let cacheData = { tickets: [] };
-      let useCache = false;
+      console.log('🔍 Loading user NFTs from blockchain...');
 
-      try {
-        const cacheResponse = await fetch(`http://localhost:3001/api/tickets/user/${address}`);
-        cacheData = await cacheResponse.json();
-        useCache = cacheData.tickets && cacheData.tickets.length > 0;
-        if (useCache) {
-          console.log(`✅ Found ${cacheData.tickets.length} tickets in cache`);
-        }
-      } catch (cacheError) {
-        console.warn('📝 Database cache unavailable, loading from blockchain:', cacheError);
+      // 获取用户的 NFT 数量
+      const balanceResult = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: [
+          {
+            inputs: [{ internalType: 'address', name: 'owner', type: 'address' }],
+            name: 'balanceOf',
+            outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+            stateMutability: 'view',
+            type: 'function'
+          }
+        ],
+        functionName: 'balanceOf',
+        args: [address],
+      }) as bigint;
+
+      console.log(`✅ User owns ${balanceResult} NFTs`);
+
+      if (balanceResult === 0n) {
+        setTickets([]);
+        setLoading(false);
+        return;
       }
 
-      if (useCache) {
-        // 从缓存数据构建票据列表，只需要查询活动信息和挂单状态
-        const ticketPromises = cacheData.tickets.map(async (cachedTicket: any) => {
-          try {
-            const tokenId = BigInt(cachedTicket.token_id);
-            const occasionId = BigInt(cachedTicket.occasion_id);
-
-            // 验证当前拥有者（防止票已转让）
-            const currentOwner = await publicClient.readContract({
-              address: CONTRACT_ADDRESS,
-              abi: CONTRACT_ABI,
-              functionName: 'ownerOf',
-              args: [tokenId],
-            }) as string;
-
-            if (currentOwner.toLowerCase() !== address.toLowerCase()) {
-              console.log(`⚠️ Token ${tokenId} has been transferred`);
-              return null;
-            }
-
-            // 获取活动信息
-            const occasion = await publicClient.readContract({
-              address: CONTRACT_ADDRESS,
-              abi: CONTRACT_ABI,
-              functionName: 'getOccasion',
-              args: [occasionId],
-            }) as any;
-
-            // 获取挂单信息
-            const listing = await publicClient.readContract({
-              address: CONTRACT_ADDRESS,
-              abi: CONTRACT_ABI,
-              functionName: 'getListing',
-              args: [tokenId],
-            }) as any;
-
-            return {
-              tokenId,
-              occasionId,
-              seat: BigInt(cachedTicket.seat_number),
-              occasionName: occasion.name,
-              occasionDate: occasion.date,
-              occasionLocation: occasion.location,
-              isListed: listing.isActive,
-              listingPrice: listing.price,
-              resellable: occasion.resellable,
-              eventEndTime: occasion.eventEndTime || BigInt(0),
-              poapEnabled: occasion.poapEnabled || false,
-              hasClaimed: cachedTicket.has_claimed_poap || false,
-              isCheckedIn: cachedTicket.is_checked_in || false,
-            };
-          } catch (error) {
-            console.error('Error loading ticket:', error);
-            return null;
-          }
-        });
-
-        const results = await Promise.all(ticketPromises);
-        const myTickets = results.filter((t): t is TicketInfo => t !== null);
-        setTickets(myTickets);
-      } else {
-        // 从区块链加载：获取用户拥有的所有NFT
-        console.log('🔍 Querying blockchain for user tickets...');
-
+      // 使用 tokenOfOwnerByIndex 获取每个 tokenId
+      const ticketIds = [];
+      for (let i = 0n; i < balanceResult; i++) {
         try {
-          // 直接从合约获取用户的tickets
-          console.log(`Calling getUserTickets for address: ${address}`);
-
-          let userTicketIds: bigint[] = [];
-          try {
-            userTicketIds = await publicClient.readContract({
-              address: CONTRACT_ADDRESS,
-              abi: CONTRACT_ABI,
-              functionName: 'getUserTickets',
-              args: [address],
-            }) as bigint[];
-            console.log(`✅ getUserTickets returned ${userTicketIds.length} tickets`);
-          } catch (contractError) {
-            console.error('Error calling getUserTickets:', contractError);
-            userTicketIds = [];
-          }
-
-          if (userTicketIds && userTicketIds.length > 0) {
-            console.log(`✅ Found ${userTicketIds.length} tickets on blockchain`);
-
-            // 为每个ticket获取详细信息
-            const ticketPromises = userTicketIds.map(async (tokenId) => {
-              try {
-                // 获取ticket的活动和座位信息
-                const ticketInfo = await publicClient.readContract({
-                  address: CONTRACT_ADDRESS,
-                  abi: CONTRACT_ABI,
-                  functionName: 'getTicketInfo',
-                  args: [tokenId],
-                }) as { occasionId: bigint; seat: bigint };
-
-                // 获取活动信息
-                const occasion = await publicClient.readContract({
-                  address: CONTRACT_ADDRESS,
-                  abi: CONTRACT_ABI,
-                  functionName: 'getOccasion',
-                  args: [ticketInfo.occasionId],
-                }) as any;
-
-                // 获取挂单信息
-                const listing = await publicClient.readContract({
-                  address: CONTRACT_ADDRESS,
-                  abi: CONTRACT_ABI,
-                  functionName: 'getListing',
-                  args: [tokenId],
-                }) as any;
-
-                // 获取检票状态
-                const checkedIn = await publicClient.readContract({
-                  address: CONTRACT_ADDRESS,
-                  abi: CONTRACT_ABI,
-                  functionName: 'isCheckedIn',
-                  args: [tokenId],
-                }) as boolean;
-
-                return {
-                  tokenId,
-                  occasionId: ticketInfo.occasionId,
-                  seat: ticketInfo.seat,
-                  occasionName: occasion.name,
-                  occasionDate: occasion.date,
-                  occasionLocation: occasion.location,
-                  isListed: listing.isActive,
-                  listingPrice: listing.price,
-                  resellable: occasion.resellable,
-                  eventEndTime: occasion.eventEndTime || BigInt(0),
-                  poapEnabled: occasion.poapEnabled || false,
-                  hasClaimed: false, // 区块链查询不支持,默认false
-                  isCheckedIn: checkedIn,
-                };
-              } catch (error) {
-                console.error(`Error loading ticket ${tokenId}:`, error);
-                return null;
+          const tokenId = await publicClient.readContract({
+            address: CONTRACT_ADDRESS,
+            abi: [
+              {
+                inputs: [
+                  { internalType: 'address', name: 'owner', type: 'address' },
+                  { internalType: 'uint256', name: 'index', type: 'uint256' }
+                ],
+                name: 'tokenOfOwnerByIndex',
+                outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+                stateMutability: 'view',
+                type: 'function'
               }
-            });
-
-            const results = await Promise.all(ticketPromises);
-            const myTickets = results.filter((t): t is TicketInfo => t !== null);
-            setTickets(myTickets);
-          } else {
-            console.log('⚠️ No tickets found on blockchain');
-            setTickets([]);
-          }
+            ],
+            functionName: 'tokenOfOwnerByIndex',
+            args: [address, i],
+          }) as bigint;
+          ticketIds.push(tokenId);
         } catch (error) {
-          console.error('Failed to load tickets from blockchain:', error);
-          setTickets([]);
+          console.warn(`Could not fetch token ${i}:`, error);
         }
       }
+
+      console.log(`📋 Found ${ticketIds.length} ticket IDs:`, ticketIds);
+
+      // 构建简化的票务信息
+      const loadedTickets: TicketInfo[] = ticketIds.map(tokenId => ({
+        tokenId,
+        occasionId: 0n,
+        seat: 0n,
+        occasionName: `Ticket #${tokenId}`,
+        occasionDate: 'N/A',
+        occasionLocation: 'N/A',
+        isListed: false,
+        listingPrice: 0n,
+        resellable: false,
+        eventEndTime: 0n,
+        poapEnabled: false,
+        hasClaimed: false,
+        isCheckedIn: false,
+      }));
+
+      setTickets(loadedTickets);
+      console.log('🎫 Tickets loaded successfully!');
     } catch (error) {
       console.error('Failed to load tickets:', error);
       setTickets([]);
